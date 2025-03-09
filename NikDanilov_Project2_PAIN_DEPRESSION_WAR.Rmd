@@ -1,0 +1,232 @@
+---
+title: "Impact of war on pain and depression in Ukrainian population"
+output: html_notebook
+---
+
+## OUTLINE
+
+Introduction
+
+-   Brief background on the research question
+-   Aim of the study: To investigate the impact of war conditions on
+    pain levels, depression, and medication usage
+
+1.  Data preprocessing
+
+-   Key variables
+-   Classification of key variables
+    * Diagnosis: musculoskeletal vs. cancer-related pain
+    * War exposure: "air attacks" vs. "active war"
+-   Data validation and cleaning
+    - Handling missing values and inconsistencies
+
+[...]
+
+x.  Discussion
+
+-   Summary of findings
+-   Interpretation of results in the context of war’s psychological
+    and physiological impact
+-   Limitations and future research directions
+
+Conclusion
+
+-   Key takeaways
+-   Policy and healthcare implications
+
+----------------------------------------------------------------------
+
+## INTRODUCTION
+
+----------------------------------------------------------------------
+
+## I. DATA PREPROCESSING
+
+### Prepairing the dataset
+
+Before proceeding with statistical analysis, review of the **raw data** (the `DataCollect_PainDepr.xlsx` file) was conducted to identify inconsistencies, overt errors or typos. Since these issues would primarily affect clarity of the initial data and further assessments, the raw data were manually proofread before importing them into statistical analysis in R.
+
+Adjustments included:
+
+-   standardizing variable names to ensure consistency across analyses (e.g., unification of the names of the Ukrainian cities according to their internationally accepted spellings)
+-   correcting typos and formatting errors in categorical values to prevent misclassification
+-   ensuring uniform structure across all relevant variables within the dataset
+
+During checking the raw data, one out of three sheets had an observation/row (`ID` = 000122) absent in two others and thus lacked data of most variables used in the current study. Therefore, we amputated it in order to preserve the amount of observations with fully assessable data as 363.   
+
+These refinements allow for accurate variable interpretation, minimizing errors in subsequent analyses. The **updated dataset** (`DataCollect_PainDepr_UPD.xlsx`) was then imported into R for statistical analysis.
+
+```{r}
+# Load necessary libraries
+# install.packages("dplyr")
+# install.packages("readxl")
+library(dplyr)
+library(readxl)
+
+# Load dataset
+file_path <- "C:\\Users\\Asus\\My Drive\\MPH (BIOSTATS)\\COURSES\\Y2_A\\PROJECTS_IN_BIOSTATISTICS\\Project2_PAIN_DEPRESSION_WAR\\Task\\DataCollect_PainDepr_UPD.xlsx"
+data <- read_excel(file_path)
+
+# Check structure after reloading
+str(data)
+
+# View first few rows
+head(data)
+
+# Convert age to numeric
+data$age <- as.numeric(data$age)
+
+# Check if conversion worked
+str(data$age)
+summary(data$age)
+
+```
+
+### Characteristics of the clinical study
+
+The study aimed to assess clinical condition and its dynamics of inhabitants of the chosen provinces (oblasts) of Ukraine, who were suffering from chronic pain syndrome due to cancer-related or non-cancerous, orthopedic-related pathology, shortly before and approximately 300 day after the beginning of the full-scale Russian aggression (since 24 February 2022) during the current Russian-Ukrainian war (since 2014).    
+
+### Characterictics of the study sample 
+
+[demographic descriptive statistics]
+
+363 people
+
+all patients were recorded between 16-20 days after start of the war
+
+### Characteristics of the clinical study's methods
+
+Evaluation of pain intensity were performed according to the ***Visual Analogue Scale (VAS)*** score, where:
+
+- 0 - absence of pain
+- 1-3 - mild pain
+- 4-6 - moderate pain
+- 7-10 - severe pain
+
+Evaluation of depression severity were performed according to the ***Patient Health Questionnaire-9 (PHQ-9)*** score, where:
+
+- 0-4 - absence of depression
+- 5-9 - mild depression
+- 10-14 - moderate depression
+- 15-19 - moderately severe depression
+- 20-27 - severe depression
+
+Analgesic medicines used:
+
+- non-steroidal anti-inflammatory drug - Diclofenac 
+- GABApentinoid anticonvulsant - Pregabalin
+- weak opioid drug - Tramadol
+- strong opioid drugs - Morphine,Oxycodone, Fentanyl 
+
+### Characterictics of the variables
+
+In the dataset, the following variables are used:
+
+- `region` (categorical nominal) - a Ukrainian oblast (province) which inhabitants were included in the trial; the 12 oblasts researched were those of Chernihiv, Kharkiv, Kyiv, Lviv, Mykolaiv, Odesa, Rivne, Sumy, Ternopil, Uman, Vinnytsia, and Zhytomyr
+
+- `war_status` (categorical ordinal) - the patients' **exposure** to the war:
+
+  1 - "red zone", a Ukrainian oblast (province) which were ≥ 90 days in the "active" war (i.e. under recurrent direct artillery shellings); these are the oblasts of Kharkiv and Mykolaiv
+  2 - "green zone", an oblast which is < 90 days in the "active" war; these are oblasts of Kyiv, Sumy, Chernihiv, and Odesa 
+  3 - "black zone", an oblast recurrently exposed to the missile/drone airstrikes only (i.e. being more distant from the front line); these are the oblasts of Vinnytsia, Lviv, Ternopil, Rivne, Uman, and Zhytomyr
+  
+- `age` (numerical continuous) - age of a patient (in years)
+
+- `sex` (binary) - gender of a patient: 0 - male; 1 - female
+
+- `Dx` (binary) - a diagnosis characterized by chronic pain syndrome, either 
+
+  0 - cancer-related pain (due to mammary, gastric, hepatic, intestinal, pancreatic, uterine, and cutaneous cancer)
+  1 - musculoskeletal pain (due to non-cancerous orthopedic pathology as vertebral stenosis, spina bifida, gonarthrosis, fibromyalgia, COVID-related myalgia)
+   
+- `Tx` (categorical ordinal) - the analgesic drug treatment permanently used by the patients with chronic pain syndrome before the full-scale war (before 2022); the medicines are ranked due to their analgesic effect from the weakest to the strongest:
+
+  1 - Diclofenac (225 mg/day)
+  2 - Pregabalin (150 mg/day)
+  3 - Tramadol (50 mg/day)
+  4 - Tramadol (100 mg/day)
+  5 - Tramadol (50 mg/day) + Pregabalin (150 mg/day)
+  6 - Tramadol (50 mg/day) + Pregabalin (300 mg/day)
+  7 - Morphine (20 mg/day)
+  8 - Morphine (40 mg/day)
+  9 - Oxycodone (10 mg/day)
+  10 - Oxycodone (20 mg/day)
+  11 - Oxycodone (40 mg/day)
+  12 - Oxycodone (20 mg/day) + Pregabalin (75 mg/day)
+  13 - Oxycodone (20 mg/day) + Pregabalin (150 mg/day)
+  14 - Oxycodone (40 mg/day) + Pregabalin (75 mg/day)
+  15 - Oxycodone (40 mg/day) + Pregabalin (150 mg/day)
+  16 - Fentanyl (0.025 mg/day)
+  17 - Fentanyl (0.05 mg/day)
+  18 - Fentanyl (0.075 mg/day)
+  19 - Fentanyl (0.1 mg/day)
+  
+- `VAS_before` (numerical discrete) - VAS score 15-30 days before the full-scale war
+
+- `VAS_15` (numerical discrete) - VAS scoreVAS score just after 15 days of the full-scale war experience
+
+- `VAS_30` (numerical discrete) - VAS score just after 30 days of the full-scale war experience
+
+- `VAS_60` (numerical discrete) - VAS score just after 60 days of the full-scale war experience
+
+- `VAS_90` (numerical discrete) - VAS score just after 90 days of the full-scale war experience
+
+-`VAS_180` (numerical discrete) - VAS score just after 180 days of the full-scale war experience
+
+-`VAS_300` (numerical discrete) - VAS score 300 ± 10 days of the full-scale war experience
+
+- `PHQ-9_before` (numerical discrete) - PHQ-9 score 15-30 days before the full-scale war  
+
+- `PHQ-9_30` (numerical discrete) - PHQ-9 score just after 30 days of the full-scale war experience
+
+- `PHQ-9_60` (numerical discrete) - PHQ-9 score just after 60 days of the full-scale war experience
+
+- `PHQ-9_90` (numerical discrete) - PHQ-9 score just after 90 days of the full-scale war experience
+
+-`PHQ-9_180` (numerical discrete) - PHQ-9 score just after 180 days of the full-scale war experience
+
+-`PHQ-9_300` (numerical discrete) - PHQ-9 score 300 ± 10 days of the full-scale war experience
+
+- `add_Tx_15` (binary) - whether was increase in dosage of the same medicine just after 15 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `add_Tx_30` (binary) - whether was increase in dosage of the same medicine just after 30 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `add_Tx_60` (binary) - whether was increase in dosage of the same medicine just after 60 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `add_Tx_90` (binary) - whether was increase in dosage of the same medicine just after 90 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `add_Tx_180` (binary) - whether was increase in dosage of the same medicine just after 180 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `add_Tx_300` (binary) - whether was increase in dosage of the same medicine just after 300 ± 10 days of the full-scale war experience: 0 - no; 1 - yes
+
+- `ini_pain_red` (numerical ordinal) - how effective was pain reduction (due to a patient's perception, in %) after analgesic drug treatment, but before the full-scale war, where:
+
+  2 - pain reduction of up to 20%
+  3 - pain reduction of 20-30%
+  4 - pain reduction of 30-40%
+  5 - pain reduction of 40-50%
+  6 - pain reduction of 50-60%
+  7 - pain reduction of 60-70%
+  8 - pain reduction of 70-80%
+  9 - pain reduction of 80-90%
+  10 - pain reduction of 90-100%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
