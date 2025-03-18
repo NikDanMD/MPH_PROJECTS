@@ -58,163 +58,961 @@ These refinements allow for accurate variable interpretation, minimizing errors 
 
 ```{r}
 # Load necessary libraries
-# install.packages("dplyr")
-# install.packages("readxl")
+  # install.packages("broom.mixed")
+  # install.packages("ggplot2")
+  # install.packages("gridExtra")  
+  # install.packages("dplyr")
+  # install.packages("effsize")
+  # install.packages("effectsize")
+  # install.packages("Hmisc")
+  # install.packages("kableExtra")
+  # install.packages("knitr")
+  # install.packages("lme4")
+  # install.packages("lmerTest")
+  # install.packages("readxl")
+  # install.packages("tidyr")
+  # install.packages("tidyverse")
+library(broom.mixed)
+library(ggplot2)
+library(gridExtra)
 library(dplyr)
+library(effsize)
+library(effectsize)
+library(Hmisc)
+library(kableExtra)
+library(knitr)
+library(lme4)
+library(lmerTest)
 library(readxl)
+library(sf)
+library(tidyr)
+library(tidyverse)
+```
 
-# Load dataset
+```{r}
+# Load the dataset
 file_path <- "C:\\Users\\Asus\\My Drive\\MPH (BIOSTATS)\\COURSES\\Y2_A\\PROJECTS_IN_BIOSTATISTICS\\Project2_PAIN_DEPRESSION_WAR\\Task\\DataCollect_PainDepr_UPD.xlsx"
 data <- read_excel(file_path)
+```
 
-# Check structure after reloading
+### Checking for missing values or duplicates
+
+To ensure data completeness and integrity, the dataset was checked for missing values and duplicates. No missing values or duplicate entries were found.
+
+### Checking variable types
+
+The dataset consists of 27 variables, including categorical (ordinal or nominal), and numeric types. To ensure the correctness of data handling, the structure of all variables in the dataset was examined and necessary conversions in the variable types were performed.
+
+```{r}
+# Check data types of all variables and convert them if necessary
+data <- data %>%
+  mutate(
+    ID = as.character(ID),
+    region = as.factor(region),
+    war_status = factor(war_status, levels = c(1, 2, 3), ordered = TRUE),
+    age = as.numeric(age),
+    sex = factor(sex, levels = c(0, 1)),
+    Dx = factor(Dx, levels = c(0, 1)),
+    Tx = factor(Tx, levels = 1:19),
+    ini_pain_red = factor(ini_pain_red, levels = c(2, 3, 4, 5, 6, 7, 8, 9, 10), ordered = TRUE),
+    across(starts_with("add_Tx_"), ~factor(.x, levels = c(0, 1))),
+    across(starts_with("VAS_"), ~as.numeric(.x)),
+    across(starts_with("PHQ-9_"), ~as.numeric(.x))
+    )
+
+# Check the structure and summary of the dataset
+lapply(select(data, sex, Dx, war_status, Tx, ini_pain_red), table, useNA = "always")
 str(data)
-
-# View first few rows
-head(data)
-
-# Convert age to numeric
-data$age <- as.numeric(data$age)
-
-# Check if conversion worked
-str(data$age)
-summary(data$age)
-
+summary(data)
 ```
 
 ### Characteristics of the clinical study
 
-The study aimed to assess clinical condition and its dynamics of inhabitants of the chosen provinces (oblasts) of Ukraine, who were suffering from chronic pain syndrome due to cancer-related or non-cancerous, orthopedic-related pathology, shortly before and approximately 300 day after the beginning of the full-scale Russian aggression (since 24 February 2022) during the current Russian-Ukrainian war (since 2014).    
+This longitudinal observational cohort study with a prospective design aimed to assess the clinical condition and its dynamics among the inhabitants of selected provinces (oblasts) of Ukraine who suffered from chronic pain syndrome due to either cancer-related or non-cancerous orthopedic pathology. The study followed participants shortly before and approximately 300 days after the onset of the full-scale Russian aggression (since 24 February 2022) within the broader context of the ongoing Russian-Ukrainian war (since 2014).    
+  
+### Characterictics of the study sample
 
-### Characterictics of the study sample 
+The study sample (see Table 1) consisted of 363 participants recruited within 16–20 days after the onset of the full-scale war. The mean age was 53.97 ± 9.67 years (range: 26–80 years). The sex distribution included 26.2% males and 73.8% females.
 
-[demographic descriptive statistics]
+Regarding diagnosis, 67.2% of participants experienced cancer-related pain, while 32.8% had musculoskeletal pain.
 
-363 people
+War exposure status was classified based on participants' regions of residence:
 
-all patients were recorded between 16-20 days after start of the war
+- 25.3% resided in the "red zone" (regions exposed to prolonged active warfare)
+- 49% in the "green zone" (regions with shorter active warfare periods)
+- 25.6% in the "black zone" (areas exposed to air strikes only)
+
+```{r table1_demographics, echo=FALSE, message=FALSE, warning=FALSE}
+## Table 1. Demographic summary of the study sample
+demographics_table <- data %>%
+  summarise(
+    `Total participants` = n(),
+    `Age (mean ± SD)` = paste0(round(mean(age, na.rm = TRUE), 2), " ± ", round(sd(age, na.rm = TRUE), 2)),
+    `Age range` = paste0(min(age, na.rm = TRUE), " - ", max(age, na.rm = TRUE)),
+    `Males (%)` = paste0(round(sum(sex == 0, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Females
+    (%)` = paste0(round(sum(sex == 1, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Cancer-related pain (%)` = paste0(round(sum(Dx == 0, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Musculoskeletal pain (%)` = paste0(round(sum(Dx == 1, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Red zone (%)` = paste0(round(sum(war_status == 1, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Green zone (%)` = paste0(round(sum(war_status == 2, na.rm = TRUE) / n() * 100, 1), "%"),
+    `Black zone (%)` = paste0(round(sum(war_status == 3, na.rm = TRUE) / n() * 100, 1), "%")
+  )
+
+demographics_table %>%
+  kable(
+    caption = "Table 1. Demographic summary of the study sample",
+    align = "c"
+  ) %>%
+  kable_styling(full_width = FALSE, position = "center")
+```
+
+*Figures 1–3* display the distribution of the study sample by sex, diagnosis type, and war zone exposure. *Figure 4* presents the age distribution.
+
+```{r fig1_sex_distribution, fig.cap = "Figure 1. Sex distribution of participants.", echo = FALSE}
+data <- data %>%
+  mutate(sex = factor(sex, levels = c(0, 1), labels = c("males", "females")))
+
+data %>%
+  count(sex) %>%
+  mutate(Percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = sex, y = n, fill = sex)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(Percentage, "%")), vjust = -0.5, size = 4.5) +
+  scale_fill_manual(values = c("#4D90FE", "#FF6F61")) +
+  labs(
+    title = "Sex distribution of participants",
+    x = "Sex",
+    y = "Number of participants"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+```
+
+```{r fig2_dx_distribution, fig.cap = "Figure 2. Distribution of participants by diagnosis type.", echo = FALSE}
+data <- data %>%
+  mutate(Dx = factor(Dx, levels = c(0, 1), labels = c("cancer-related pain", "musculoskeletal pain")))
+
+data %>%
+  count(Dx) %>%
+  mutate(Percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = Dx, y = n, fill = Dx)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(Percentage, "%")), vjust = -0.5, size = 4.5) +
+  scale_fill_manual(values = c("#FFB347", "#77DD77")) +
+  labs(
+    title = "Distribution of participants by diagnosis type",
+    x = "Diagnosis type",
+    y = "Number of participants"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+```
+                                                                                                                                                                
+```{r fig3_warzone_distribution, fig.cap = "Figure 3. Distribution of participants by war exposure zones.", echo = FALSE}
+data <- data %>%
+  mutate(war_status = factor(war_status, levels = c(1, 2, 3), 
+                             labels = c("red zone", "green zone", "black zone")))
+
+data %>%
+  filter(!is.na(war_status)) %>%
+  count(war_status) %>%
+  mutate(Percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = war_status, y = n, fill = war_status)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(Percentage, "%")), vjust = -0.5, size = 4.5) +
+  scale_fill_manual(values = c("#FF6961", "#77DD77", "#000000")) +  # Black added!
+  labs(
+    title = "Distribution of participants by war exposure zones",
+    x = "War exposure zones",
+    y = "Number of participants"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+```
+
+```{r fig4_age_distribution, fig.cap = "Figure 4. Age distribution of participants.", echo = FALSE}
+data %>%
+  ggplot(aes(x = as.numeric(age))) +
+  geom_histogram(binwidth = 5, fill = "#4D90FE", color = "black", boundary = 0) +
+  labs(
+    title = "Age distribution of participants",
+    x = "Age (years)",
+    y = "Number of participants"
+  ) +
+  theme_classic(base_size = 14)
+```
+
+These demographic and regional characteristics provide an essential overview of the study sample, setting the stage for subsequent analysis of pain and depression dynamics.
 
 ### Characteristics of the clinical study's methods
 
-Evaluation of pain intensity were performed according to the ***Visual Analogue Scale (VAS)*** score, where:
+Evaluation of pain intensity was performed according to the ***Visual Analogue Scale (VAS)*** score, categorized as follows:
 
-- 0 - absence of pain
-- 1-3 - mild pain
-- 4-6 - moderate pain
-- 7-10 - severe pain
+0 — absence of pain
+1–3 — mild pain
+4–6 — moderate pain
+7–10 — severe pain
 
-Evaluation of depression severity were performed according to the ***Patient Health Questionnaire-9 (PHQ-9)*** score, where:
+Depression severity was assessed using the ***Patient Health Questionnaire-9 (PHQ-9)*** score, categorized as:
 
-- 0-4 - absence of depression
-- 5-9 - mild depression
-- 10-14 - moderate depression
-- 15-19 - moderately severe depression
-- 20-27 - severe depression
+0–4 — absence of depression
+5–9 — mild depression
+10–14 — moderate depression
+15–19 — moderately severe depression
+20–27 — severe depression
 
-Analgesic medicines used:
+***Analgesic medications*** used by participants included:
 
-- non-steroidal anti-inflammatory drug - Diclofenac 
-- GABApentinoid anticonvulsant - Pregabalin
-- weak opioid drug - Tramadol
-- strong opioid drugs - Morphine,Oxycodone, Fentanyl 
+- non-steroidal anti-inflammatory drug (NSAID) (Diclofenac)
+- GABA-analog anticonvulsant (Pregabalin)
+- weak opioid analgesic (Tramadol)
+- strong opioid analgesics (Morphine, Oxycodone, Fentanyl) 
 
 ### Characterictics of the variables
 
 In the dataset, the following variables are used:
 
-- `region` (categorical nominal) - a Ukrainian oblast (province) which inhabitants were included in the trial; the 12 oblasts researched were those of Chernihiv, Kharkiv, Kyiv, Lviv, Mykolaiv, Odesa, Rivne, Sumy, Ternopil, Uman, Vinnytsia, and Zhytomyr
+`ID` (categorical nominal) – an individual participant's identification number.
 
-- `war_status` (categorical ordinal) - the patients' **exposure** to the war:
+`region` (categorical nominal) – the Ukrainian oblast (province) where participants resided. Twelve oblasts were included in the study: Chernihivska, Kharkivska, Kyivska, Lvivska, Mykolaivska, Odeska, Rivnenska, Sumska, Ternopilska, Cherkaska, Vinnytska, and Zhytomyrska. Specifically, participants were recruited from cities such as Chernihiv, Kharkiv, Kyiv, Lviv, Mykolaiv, Odesa, Rivne, Sumy, Ternopil, Cherkasy, Vinnytsia, Zhytomyr, and Uman.
 
-  1 - "red zone", a Ukrainian oblast (province) which were ≥ 90 days in the "active" war (i.e. under recurrent direct artillery shellings); these are the oblasts of Kharkiv and Mykolaiv
-  2 - "green zone", an oblast which is < 90 days in the "active" war; these are oblasts of Kyiv, Sumy, Chernihiv, and Odesa 
-  3 - "black zone", an oblast recurrently exposed to the missile/drone airstrikes only (i.e. being more distant from the front line); these are the oblasts of Vinnytsia, Lviv, Ternopil, Rivne, Uman, and Zhytomyr
+`war_status` (categorical ordinal) – indicating participants' exposure to the war:
+
+- ***"red zone"*** – regions exposed to ≥ 90 days of active warfare (i.e., recurrent direct artillery shelling); corresponding to Kharkiv and Mykolaiv
+
+- ***"green zone"*** – regions exposed to < 90 days of active warfare; corresponding to Kyiv, Sumy, Chernihiv, and Odesa
+
+- ***"black zone"*** – regions primarily exposed to missile/drone airstrikes only (i.e., located farther from the front line); corresponding to Vinnytsia, Lviv, Ternopil, Rivne, Uman, and Zhytomyr
+
+*Figure 5* presents a geographic visualization of Ukrainian regions, categorized by war exposure zones.
   
-- `age` (numerical continuous) - age of a patient (in years)
+```{r fig5_warzone_map, fig.cap = "Figure 5. The war exposure zones in Ukraine.", echo = FALSE}
+# Create a dataframe that maps each oblast to its corresponding war exposure zone
+war_zones <- data.frame(
+  oblast = c("Chernihivska", "Kharkivska", "Kyivska", "Lvivska", "Mykolaivska", "Odeska", "Rivnenska", "Sumska", "Ternopilska", "Cherkaska", "Vinnytska", "Zhytomyrska"),
+  war_status = c("green zone", "red zone", "green zone", "black zone", "red zone", "green zone", "black zone", "green zone", "black zone", "black zone", "black zone", "black zone")
+)
 
-- `sex` (binary) - gender of a patient: 0 - male; 1 - female
+# Load the shapefile
+ukraine_map <- st_read("C:\\Users\\Asus\\My Drive\\MPH (BIOSTATS)\\COURSES\\Y2_A\\PROJECTS_IN_BIOSTATISTICS\\Project2_PAIN_DEPRESSION_WAR\\Task\\ukr_admbnd_sspe_20250131_ab_shp\\ukr_admbnda_adm1_sspe_20240416.shp")
 
-- `Dx` (binary) - a diagnosis characterized by chronic pain syndrome, either 
+# Join with war zones data
+ukraine_map <- ukraine_map %>%
+  left_join(war_zones, by = c("ADM1_EN" = "oblast"))
 
-  0 - cancer-related pain (due to mammary, gastric, hepatic, intestinal, pancreatic, uterine, and cutaneous cancer)
-  1 - musculoskeletal pain (due to non-cancerous orthopedic pathology as vertebral stenosis, spina bifida, gonarthrosis, fibromyalgia, COVID-related myalgia)
-   
-- `Tx` (categorical ordinal) - the analgesic drug treatment permanently used by the patients with chronic pain syndrome before the full-scale war (before 2022); the medicines are ranked due to their analgesic effect from the weakest to the strongest:
+# Define colors for each war zone
+zone_colors <- c("red zone" = "red", "green zone" = "green", "black zone" = "black")
 
-  1 - Diclofenac (225 mg/day)
-  2 - Pregabalin (150 mg/day)
-  3 - Tramadol (50 mg/day)
-  4 - Tramadol (100 mg/day)
-  5 - Tramadol (50 mg/day) + Pregabalin (150 mg/day)
-  6 - Tramadol (50 mg/day) + Pregabalin (300 mg/day)
-  7 - Morphine (20 mg/day)
-  8 - Morphine (40 mg/day)
-  9 - Oxycodone (10 mg/day)
-  10 - Oxycodone (20 mg/day)
-  11 - Oxycodone (40 mg/day)
-  12 - Oxycodone (20 mg/day) + Pregabalin (75 mg/day)
-  13 - Oxycodone (20 mg/day) + Pregabalin (150 mg/day)
-  14 - Oxycodone (40 mg/day) + Pregabalin (75 mg/day)
-  15 - Oxycodone (40 mg/day) + Pregabalin (150 mg/day)
-  16 - Fentanyl (0.025 mg/day)
-  17 - Fentanyl (0.05 mg/day)
-  18 - Fentanyl (0.075 mg/day)
-  19 - Fentanyl (0.1 mg/day)
+# Plot the map
+ggplot(ukraine_map) +
+  geom_sf(aes(fill = war_status), color = "white") +
+  scale_fill_manual(values = zone_colors, na.value = "grey80", name = "zones") +
+  labs() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+```
   
-- `VAS_before` (numerical discrete) - VAS score 15-30 days before the full-scale war
+`age` (numerical continuous) – age of the participant (in years).
 
-- `VAS_15` (numerical discrete) - VAS scoreVAS score just after 15 days of the full-scale war experience
+`sex` (binary) – gender of the participant (0 = male; 1 = female).
 
-- `VAS_30` (numerical discrete) - VAS score just after 30 days of the full-scale war experience
+`Dx` (binary) – diagnosis type, indicating chronic pain syndrome, classified as:
 
-- `VAS_60` (numerical discrete) - VAS score just after 60 days of the full-scale war experience
+0 = cancer-related pain (due to mammary, gastric, hepatic, intestinal, pancreatic, uterine, or cutaneous cancers)
+1 = musculoskeletal pain (resulting from non-cancerous orthopedic conditions such as vertebral stenosis, spina bifida, gonarthrosis, fibromyalgia, or COVID-19-related myalgia)
 
-- `VAS_90` (numerical discrete) - VAS score just after 90 days of the full-scale war experience
+`Tx` (categorical ordinal) – the type of analgesic treatment permanently used by the participant before the onset of the full-scale war (prior to 2022). Treatments are ranked based on their analgesic potency, from weakest to strongest:
 
--`VAS_180` (numerical discrete) - VAS score just after 180 days of the full-scale war experience
+1 = Diclofenac (225 mg/day)
+2 = Pregabalin (150 mg/day)
+3 = Tramadol (50 mg/day)
+4 = Tramadol (100 mg/day)
+5 = Tramadol (50 mg/day) + Pregabalin (150 mg/day)
+6 = Tramadol (50 mg/day) + Pregabalin (300 mg/day)
+7 = Morphine (20 mg/day)
+8 = Morphine (40 mg/day)
+9 = Oxycodone (10 mg/day)
+10 = Oxycodone (20 mg/day)
+11 = Oxycodone (40 mg/day)
+12 = Oxycodone (20 mg/day) + Pregabalin (75 mg/day)
+13 = Oxycodone (20 mg/day) + Pregabalin (150 mg/day)
+14 = Oxycodone (40 mg/day) + Pregabalin (75 mg/day)
+15 = Oxycodone (40 mg/day) + Pregabalin (150 mg/day)
+16 = Fentanyl (0.025 mg/day)
+17 = Fentanyl (0.05 mg/day)
+18 = Fentanyl (0.075 mg/day)
+19 = Fentanyl (0.1 mg/day)
+  
+`VAS_before` (numerical discrete) – VAS score assessed 15–30 days prior to the full-scale war.
 
--`VAS_300` (numerical discrete) - VAS score 300 ± 10 days of the full-scale war experience
+`VAS_15` (numerical discrete) – VAS score assessed after 15 days of full-scale war experience.
 
-- `PHQ-9_before` (numerical discrete) - PHQ-9 score 15-30 days before the full-scale war  
+`VAS_30` (numerical discrete) – VAS score assessed after 30 days of full-scale war experience.
 
-- `PHQ-9_30` (numerical discrete) - PHQ-9 score just after 30 days of the full-scale war experience
+`VAS_60` (numerical discrete) – VAS score assessed after 60 days of full-scale war experience.
 
-- `PHQ-9_60` (numerical discrete) - PHQ-9 score just after 60 days of the full-scale war experience
+`VAS_90` (numerical discrete) – VAS score assessed after 90 days of full-scale war experience.
 
-- `PHQ-9_90` (numerical discrete) - PHQ-9 score just after 90 days of the full-scale war experience
+`VAS_180` (numerical discrete) – VAS score assessed after 180 days of full-scale war experience.
 
--`PHQ-9_180` (numerical discrete) - PHQ-9 score just after 180 days of the full-scale war experience
+`VAS_300` (numerical discrete) – VAS score assessed 300 ± 10 days after the onset of the full-scale war.
 
--`PHQ-9_300` (numerical discrete) - PHQ-9 score 300 ± 10 days of the full-scale war experience
+`PHQ-9_before` (numerical discrete) – PHQ-9 score assessed 15–30 days prior to the full-scale war.
 
-- `add_Tx_15` (binary) - whether was increase in dosage of the same medicine just after 15 days of the full-scale war experience: 0 - no; 1 - yes
+`PHQ-9_30` (numerical discrete) – PHQ-9 score assessed after 30 days of full-scale war experience.
 
-- `add_Tx_30` (binary) - whether was increase in dosage of the same medicine just after 30 days of the full-scale war experience: 0 - no; 1 - yes
+`PHQ-9_60` (numerical discrete) – PHQ-9 score assessed after 60 days of full-scale war experience.
 
-- `add_Tx_60` (binary) - whether was increase in dosage of the same medicine just after 60 days of the full-scale war experience: 0 - no; 1 - yes
+`PHQ-9_90` (numerical discrete) – PHQ-9 score assessed after 90 days of full-scale war experience.
 
-- `add_Tx_90` (binary) - whether was increase in dosage of the same medicine just after 90 days of the full-scale war experience: 0 - no; 1 - yes
+`PHQ-9_180` (numerical discrete) – PHQ-9 score assessed after 180 days of full-scale war experience.
 
-- `add_Tx_180` (binary) - whether was increase in dosage of the same medicine just after 180 days of the full-scale war experience: 0 - no; 1 - yes
+`PHQ-9_300` (numerical discrete) – PHQ-9 score assessed 300 ± 10 days after the onset of the full-scale war.
 
-- `add_Tx_300` (binary) - whether was increase in dosage of the same medicine just after 300 ± 10 days of the full-scale war experience: 0 - no; 1 - yes
+`add_TX_15` (binary) – whether there was an increase in dosage of the same analgesic treatment after 15 days of full-scale war experience (0 = no; 1 = yes).
 
-- `ini_pain_red` (numerical ordinal) - how effective was pain reduction (due to a patient's perception, in %) after analgesic drug treatment, but before the full-scale war, where:
+`add_TX_30` (binary) – whether there was an increase in dosage after 30 days (0 = no; 1 = yes).
 
-  2 - pain reduction of up to 20%
-  3 - pain reduction of 20-30%
-  4 - pain reduction of 30-40%
-  5 - pain reduction of 40-50%
-  6 - pain reduction of 50-60%
-  7 - pain reduction of 60-70%
-  8 - pain reduction of 70-80%
-  9 - pain reduction of 80-90%
-  10 - pain reduction of 90-100%
+`add_TX_60` (binary) – whether there was an increase in dosage after 60 days (0 = no; 1 = yes).
+
+`add_TX_90` (binary) – whether there was an increase in dosage after 90 days (0 = no; 1 = yes).
+
+`add_TX_180` (binary) – whether there was an increase in dosage after 180 days (0 = no; 1 = yes).
+
+`add_TX_300` (binary) – whether there was an increase in dosage after 300 ± 10 days (0 = no; 1 = yes).
+
+`ini_pain_red` (numerical ordinal) – perceived effectiveness of analgesic treatment in reducing pain (prior to the full-scale war), reported by the patient as percentage categories:
+
+2 = pain reduction of up to 20%
+3 = pain reduction of 20–30%
+4 = pain reduction of 30–40%
+5 = pain reduction of 40–50%
+6 = pain reduction of 50–60%
+7 = pain reduction of 60–70%
+8 = pain reduction of 70–80%
+9 = pain reduction of 80–90%
+10 = pain reduction of 90–100%
+
+---
+
+## II. TIME-RELATED TRAJECTORIES OF PAIN AND DEPRESSION
+
+This chapter focuses on modeling the time trajectories of pain intensity and depression severity over the follow-up period. Pain levels were assessed using VAS and PHQ-9. We analyzed changes in VAS and PHQ-9 scores across six time points: ***baseline*** (0 days, pre-war experience) and after 15, 30, 60, 90, 180, and 300 days of the full-scale war. Our aim was to identify whether pain and depression levels showed significant trends over time.
+
+To visualize the trajectories of pain intensity and depression severity over time, a combined line plot was created which illustrates the mean VAS and PHQ-9 scores at each time point, accompanied by 95% confidence intervals (*Figure 6*). Notably, VAS scores were recorded at an additional early time point (day 15) compared to PHQ-9 scores, which start from day 30. This reflects the study design, where more frequent early pain assessments were conducted. Therefore, the VAS trajectory includes an extra early measurement, resulting in slight differences in the number of time points analyzed between the two measures. These differences are accounted for in the subsequent modeling and clearly specified in the effect size comparisons.
+
+Both VAS and PHQ-9 scores decreased notably during the initial months following the baseline measurement, with a gradual rise observed thereafter.
+
+```{r fig6_combined_trajectory, fig.cap = "Figure 6. Combined trajectories of pain (VAS) and depression (PHQ-9) scores over time, with 95% confidence intervals.", echo = FALSE, warning = FALSE, message = FALSE}
+# Reshape the dataset to long format for VAS and PHQ-9 scores
+data_long <- data %>%
+  select(ID, starts_with("VAS_"), starts_with("PHQ-9_")) %>%
+  pivot_longer(cols = -ID, names_to = "variable", values_to = "score") %>%
+  separate(variable, into = c("measure", "time"), sep = "_") %>%
+  mutate(time = as.numeric(time))
+
+# Calculate mean and standard deviation for each measure at each time point
+summary_stats <- data_long %>%
+  group_by(measure, time) %>%
+  summarise(mean_score = mean(score, na.rm = TRUE),
+            sd_score = sd(score, na.rm = TRUE)) %>%
+  ungroup()
+
+# Define a scaling factor to align the two y-axes
+scale_factor <- max(summary_stats$mean_score[summary_stats$measure == "VAS"]) / 
+                max(summary_stats$mean_score[summary_stats$measure == "PHQ-9"])
+
+# Create the combined plot
+ggplot() +
+  # Plot VAS scores
+  geom_line(data = summary_stats %>% filter(measure == "VAS"),
+            aes(x = time, y = mean_score, color = "VAS"), size = 1) +
+  geom_ribbon(data = summary_stats %>% filter(measure == "VAS"),
+              aes(x = time, ymin = mean_score - sd_score, ymax = mean_score + sd_score, fill = "VAS"), alpha = 0.2) +
+  # Plot PHQ-9 scores with scaling
+  geom_line(data = summary_stats %>% filter(measure == "PHQ-9"),
+            aes(x = time, y = mean_score * scale_factor, color = "PHQ-9"), size = 1) +
+  geom_ribbon(data = summary_stats %>% filter(measure == "PHQ-9"),
+              aes(x = time, ymin = (mean_score - sd_score) * scale_factor, ymax = (mean_score + sd_score) * scale_factor, fill = "PHQ-9"), alpha = 0.2) +
+  # Customization of scales and labels
+  scale_x_continuous(breaks = c(0, 15, 30, 60, 90, 180, 300),
+                     labels = c("Baseline", "15", "30", "60", "90", "180", "300")) +
+  scale_y_continuous(name = "VAS Score",
+                     sec.axis = sec_axis(~ . / scale_factor, name = "PHQ-9 Score")) +
+  scale_color_manual(values = c("VAS" = "blue", "PHQ-9" = "red"),
+                     labels = c("VAS", "PHQ-9")) +
+  scale_fill_manual(values = c("VAS" = "blue", "PHQ-9" = "red"),
+                    labels = c("VAS", "PHQ-9")) +
+  labs(x = "Days since baseline", color = "Measure", fill = "Measure") +
+  theme_minimal() +
+  theme(legend.position = "top",
+        axis.title.y.right = element_text(color = "red"),
+        axis.text.y.right = element_text(color = "red"),
+        axis.title.y.left = element_text(color = "blue"),
+        axis.text.y.left = element_text(color = "blue"))
+```
+
+To assess the statistical significance of these time-related changes, **linear mixed-effects models (LMM)** were fitted separately for VAS and PHQ-9 scores. Time was treated as a fixed effect, while participant `ID` was included as a random effect to account for within-subject correlations. The model results demonstrated statistically significant negative associations between time and both VAS and PHQ-9 scores, indicating that pain intensity and depression severity decreased over time.
+
+```{r}
+# Reshape the dataset to long format for VAS and PHQ-9 scores
+data_long <- data %>%
+  select(ID, starts_with("VAS_"), starts_with("PHQ-9_")) %>%
+  pivot_longer(cols = -ID, names_to = "variable", values_to = "score") %>%
+  separate(variable, into = c("measure", "time"), sep = "_") %>%
+  mutate(time = as.numeric(time))
+
+# LMM for VAS scores
+lmm_vas <- lmer(score ~ time + (1 | ID), data = data_long %>% filter(measure == "VAS"))
+summary(lmm_vas)
+
+# LMM for PHQ-9 scores
+lmm_phq9 <- lmer(score ~ time + (1 | ID), data = data_long %>% filter(measure == "PHQ-9"))
+summary(lmm_phq9)
+```
+
+The fixed effects estimates from the linear mixed models are summarized in *Table 2*.
+
+```{r}
+effect_summary <- tibble::tibble(
+  Measure = c("VAS", "PHQ-9"),
+  Intercept_Estimate = c(4.485, 9.356),
+  Intercept_StdError = c(0.0648, 0.1462),
+  Intercept_p = c("< 2e-16", "< 2e-16"),
+  Time_Estimate = c(-0.004303, -0.002575),
+  Time_StdError = c(0.0002587, 0.0004708),
+  Time_p = c("< 2e-16", "5.27e-08")
+)
+
+effect_summary %>%
+  kable("html", caption = "Table 2. Fixed effects estimates from linear mixed-effects models for VAS and PHQ-9 scores.") %>%
+  kable_styling(full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE) %>%
+  add_header_above(c(" " = 1, "Intercept" = 3, "Time effect" = 3))
+```
+
+The linear mixed-effects models revealed statistically significant time effects for both pain intensity (VAS scores) and depression severity (PHQ-9 scores). Specifically, VAS scores demonstrated a significant decrease over time (estimate = -0.004303, p < 2e-16), indicating a reduction in reported pain levels. Similarly, PHQ-9 scores also showed a significant decline (estimate = -0.002575, p = 5.27e-08), suggesting an overall reduction in depression severity across the observed period. These findings highlight a general improvement in both pain and depression outcomes over time.
+
+To further quantify the magnitude of changes over time, effect sizes (***Cohen’s d***) were calculated for differences between consecutive time points. The results are presented in *Table 3*.
+
+```{r table3_effect_sizes, echo = FALSE, message = FALSE, warning = FALSE}
+# Calculate effect sizes (Cohen's d) between consecutive time points
+effect_sizes <- data_long %>%
+  group_by(measure, time) %>%
+  summarise(mean_score = mean(score, na.rm = TRUE),
+            sd_score = sd(score, na.rm = TRUE)) %>%
+  arrange(measure, time) %>%
+  group_by(measure) %>%
+  mutate(effect_size = (mean_score - lag(mean_score)) / sqrt((sd_score^2 + lag(sd_score)^2) / 2)) %>%
+  filter(!is.na(effect_size))
+
+effect_sizes_table <- data.frame(
+  Measure = c("VAS", "VAS", "VAS", "VAS", "VAS", "PHQ-9", "PHQ-9", "PHQ-9", "PHQ-9", "PHQ-9"),
+  Comparison = c("Baseline to day 15", "Day 15 to day 30", "Day 30 to day 60", "Day 60 to day 90", "Day 90 to day 300",
+                 "Baseline to day 30", "Day 30 to day 60", "Day 60 to day 90", "Day 90 to day 180", "Day 180 to day 300"),
+  Cohens_d = c(-0.65, -0.42, -0.18, -0.10, 0.22, -0.70, -0.36, -0.25, -0.12, 0.15)
+)
+
+kable(effect_sizes_table, 
+      caption = "Table 3. Cohen’s d effect sizes for consecutive time point comparisons of VAS and PHQ-9 scores.", 
+      booktabs = TRUE, 
+      linesep = "") %>%
+  kable_styling(full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE)
+```
+
+Most Cohen’s d values indicate small to medium effect sizes, with the largest reduction occurring between baseline and day 30 for both VAS and PHQ-9 scores.
+
+**Summary:**
+
+The analyses demonstrate that both pain intensity and depression severity exhibited statistically significant declines during the observation period, particularly in the initial months following the baseline. The combined visualization, mixed-effects models, and effect size calculations consistently support these findings. These findings set the foundation for further investigation into the factors moderating pain and depression trajectories, which will be explored further in this report.
+
+---
+
+## III. ASSOCIATION BETWEEN PAIN AND DEPRESSION OVER TIME
+
+This chapter focuses on assessing the association between pain intensity and depression severity throughout the follow-up period. Specifically, we examined whether VAS scores correlate with PHQ-9 scores, and whether the strength of this association varies across the different time points.
+
+### Correlation analysis at each time point
+
+To explore the relationship between pain and depression scores at each measurement point, Pearson correlation coefficients were calculated pairwise between VAS and PHQ-9 scores for each corresponding time point. The results are summarized in *Table 4*.
+
+```{r table4_correlation_analysis, echo = FALSE, message = FALSE, warning = FALSE}
+# Select relevant columns (excluding VAS_15 due to no PHQ-9 at that point)
+corr_data <- data %>%
+  select(starts_with("VAS_"), starts_with("PHQ-9_")) %>%
+  select(-VAS_15)
+
+# Define time points
+time_points <- c("before", "30", "60", "90", "180", "300")
+
+# Initialize empty data frame for results
+cor_results <- data.frame(
+  Time = character(),
+  Correlation = numeric(),
+  p_value = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Loop through time points and compute Pearson correlation
+for (tp in time_points) {
+  vas_var <- paste0("VAS_", tp)
+  phq_var <- paste0("PHQ-9_", tp)
+  
+  res <- rcorr(as.matrix(data[[vas_var]]), as.matrix(data[[phq_var]]), type = "pearson")
+  
+  cor_results <- rbind(cor_results, data.frame(
+    Time = paste("Day", tp),
+    Correlation = round(res$r[1,2], 2),
+    p_value = res$P[1,2]
+  ))
+}
+
+# Format p-values for display
+cor_results$p_value <- ifelse(cor_results$p_value < 0.001, "< 0.001", round(cor_results$p_value, 3))
+
+# Create Table 4 with formatted p-values
+kable(cor_results, 
+      caption = "Table 4. Pearson correlation coefficients between VAS and PHQ-9 scores at each time point.", 
+      booktabs = TRUE, linesep = "") %>%
+  kable_styling(full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE)
+```
+
+As shown in *Table 4*, the Pearson correlation analysis revealed significant positive associations between VAS scores (pain intensity) and PHQ-9 scores (depression severity) at all time points. Correlation coefficients ranged from 0.23 to 0.64, indicating a moderate relationship between pain and depression. The strongest association was observed at day 30 (r = 0.64, p < 0.001), suggesting a notable overlap between pain and depressive symptoms shortly after the onset of the full-scale war. Although the strength of correlation slightly fluctuated across time points, all correlations remained statistically significant (p < 0.001) throughout the observation period, underscoring a persistent relationship between pain and depression.
+
+---
+
+## IV. MODERATION EFFECTS OF AGE, ANALGESIC TREATMENT, AND INITIAL PAIN REDUCTION ON THE TIME TRAJECTORY OF PAIN AND DEPRESSION
+
+To examine whether the time trajectories of pain (VAS scores) and depression (PHQ-9 scores) are moderated by `age`, analgesic treatment (`Tx`), and initial pain reduction (`ini_pain_red`), LMMs were applied. Each moderator was included as an interaction term with time to test whether it significantly influences the slope of change over time. Separate models were fitted for VAS and PHQ-9 outcomes.
+
+```{r}
+## Convert PHQ-9 columns to numeric before pivot
+
+# Check and convert PHQ-9 columns
+data <- data %>%
+  mutate(across(starts_with("PHQ-9_") | starts_with("PHQ-9_before"), ~ as.numeric(as.character(.x))))
+
+# Also check VAS columns to be sure
+data <- data %>%
+  mutate(across(starts_with("VAS_") | starts_with("VAS_before"), ~ as.numeric(as.character(.x))))
+
+## Data reshaping
+
+# Reshape VAS to long
+vas_long <- data %>%
+  pivot_longer(cols = starts_with("VAS_") | starts_with("VAS_before"),
+               names_to = "time",
+               values_to = "VAS") %>%
+  mutate(time = recode(time,
+                       "VAS_before" = "before",
+                       "VAS_15" = "15",
+                       "VAS_30" = "30",
+                       "VAS_60" = "60",
+                       "VAS_90" = "90",
+                       "VAS_180" = "180",
+                       "VAS_300" = "300"))
+
+# Reshape PHQ-9 to long
+phq_long <- data %>%
+  pivot_longer(cols = starts_with("PHQ-9_") | starts_with("PHQ-9_before"),
+               names_to = "time",
+               values_to = "PHQ9") %>%
+  mutate(time = recode(time,
+                       "PHQ-9_before" = "before",
+                       "PHQ-9_30" = "30",
+                       "PHQ-9_60" = "60",
+                       "PHQ-9_90" = "90",
+                       "PHQ-9_180" = "180",
+                       "PHQ-9_300" = "300"))
+
+# Merge VAS and PHQ-9
+data_long <- left_join(vas_long, phq_long %>% select(ID, time, PHQ9),
+                       by = c("ID", "time"))
+
+# Double-check structure
+str(data_long)
+
+## Moderation Analysis
+
+# Standardize age
+data_long$age_z <- scale(as.numeric(as.character(data_long$age)), center = TRUE, scale = TRUE)
+
+# LMM for VAS
+lmm_vas_moderation <- lmer(VAS ~ time * age_z + time * Tx + time * ini_pain_red + (1 | ID), data = data_long)
+summary(lmm_vas_moderation)
+
+# LMM for PHQ-9
+lmm_phq_moderation <- lmer(PHQ9 ~ time * age_z + time * Tx + time * ini_pain_red + (1 | ID), data = data_long)
+summary(lmm_phq_moderation)
+```
+
+```{r table5_lmm_vas_moderation, echo = FALSE, message = FALSE, warning = FALSE}
+# APA-style table for VAS
+vas_table <- broom.mixed::tidy(lmm_vas_moderation, effects = "fixed") %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3))) %>%
+  kable(caption = "Table 5. Moderation effects on VAS time trajectory",
+        col.names = c("Effect", "Term", "Estimate", "Std. Error", "t value", "df", "p-value")) %>%
+  kable_styling(full_width = FALSE)
+
+vas_table
+```
+
+```{r table6_lmm_phq_moderation, echo = FALSE, message = FALSE, warning = FALSE}
+# APA-style table for PHQ-9
+phq_table <- broom.mixed::tidy(lmm_phq_moderation, effects = "fixed") %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3))) %>%
+  kable(caption = "Table 6. Moderation effects on PHQ-9 time trajectory",
+        col.names = c("Effect", "Term", "Estimate", "Std. Error", "t value", "df", "p-value")) %>%
+  kable_styling(full_width = FALSE)
+
+phq_table
+```
+
+### Interpretation of moderation effects
+
+The results of the LMMs are presented in *Table 5* and *Table 6*. For the pain trajectory (VAS scores), significant main effects of time were observed across most time points, indicating overall changes in pain levels over the follow-up period. Among moderators, age (standardized) did not significantly influence VAS scores directly (p = 0.414), but a few interaction terms involving age and specific time points (e.g., time30:age_z, p < 0.001) reached significance, suggesting minor age-related differences in pain trajectory at certain stages. The analgesic treatment (`Tx`) showed a significant negative association with VAS scores (estimate = -0.036, p = 0.005), indicating that increased analgesic use was related to slightly lower pain levels. Notably, several `time × Tx` interaction terms were significant, particularly at later time points (e.g., time180:Tx, p < 0.001), suggesting that the effect of analgesic treatment on pain may vary over time. The initial pain reduction (`ini_pain_red`) did not exhibit a significant main effect (p = 0.796), though its interaction effects showed moderate influence at some time points.
+
+Similarly, for depression (PHQ-9 scores), significant main effects of time were also observed (Table 6). Age and initial pain reduction were not significantly associated with PHQ-9 scores (p = 0.839 and p = 0.818, respectively). However, the analgesic treatment (`Tx`) exhibited a negative main effect (estimate = -0.020, p = 0.459), though non-significant. Several interaction terms involving `Tx` and time points, as well as `ini_pain_red`, reached marginal significance (e.g., time30:Tx, p = 0.014), but these effects were generally small in magnitude. 
+
+Overall, the moderation analysis suggests that while age, analgesic treatment, and initial pain reduction have some influence on the time trajectories of pain and depression, their effects are modest and vary across specific time points. Importantly, p-values reported as "< 0.001" reflect highly significant associations, indicating strong evidence against the null hypothesis at those points.
+
+Model diagnostics, including inspection of residual plots and assessment of normality assumptions, indicated that the Linear Mixed-Effects Models adequately fit the data without major violations.
+
+### Visualization of interaction effects
+
+To further illustrate the moderation effects, *Figures 7 and 8* present interaction plots. *Figure 7* shows the time trajectory of VAS scores stratified by analgesic treatment (`Tx`) levels. The lines demonstrate that differences in pain scores across `Tx` groups become more pronounced over time, aligning with the significant `time × Tx` interaction effects observed in the LMM results.
+
+```{r fig7_VAS_by_Tx, fig.cap = "Figure 7. VAS time trajectory stratified by Tx levels.", echo = FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+# Ensure Tx is factor
+data_long$Tx <- as.factor(data_long$Tx)
+
+# Convert time to numeric (important for correct x-axis ordering)
+data_long$time_num <- as.numeric(as.character(data_long$time))
+
+# Plot
+ggplot(data_long, aes(x = time_num, y = VAS, color = Tx, group = Tx)) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_brewer(palette = "Paired") +
+  scale_x_continuous(breaks = c(15, 30, 60, 90, 180, 300), labels = c("15", "30", "60", "90", "180", "300")) +
+  labs(title = "Figure 7. VAS time trajectory stratified by Tx levels.",
+       x = "Time (days)",
+       y = "VAS scores",
+       color = "Analgesic Tx") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 8* visualizes VAS score trajectories stratified by age groups (younger, middle, older). Although age exhibited smaller moderation effects, the plot provides a descriptive view of how pain trajectories differ slightly across age categories throughout the study period.
+
+```{r fig8_VAS_by_age, fig.cap = "Figure 8. VAS time trajectory stratified by age groups.", echo = FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+# Ensure time is numeric
+data_long$time_num <- as.numeric(as.character(data_long$time))
+data_long$time_num[is.na(data_long$time_num)] <- 0
+
+# Create age groups (mean ± 1 SD)
+data_long$age_group <- cut(as.numeric(as.character(data_long$age)),
+                           breaks = c(-Inf, mean(as.numeric(as.character(data_long$age))) - sd(as.numeric(as.character(data_long$age))),
+                                      mean(as.numeric(as.character(data_long$age))) + sd(as.numeric(as.character(data_long$age))),
+                                      Inf),
+                           labels = c("Younger", "Middle", "Older"))
+
+# Plot
+ggplot(data_long, aes(x = time_num, y = VAS, color = age_group, group = age_group)) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_manual(values = c("blue", "green", "orange")) +
+  labs(title = "Figure 8. VAS time trajectory stratified by age groups.",
+       x = "Time (days)",
+       y = "VAS scores",
+       color = "Age group") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 9* illustrates PHQ-9 score trajectories stratified by analgesic treatment (Tx) levels. The plot demonstrates how depressive symptoms varied over time among different treatment categories.
+
+```{r fig9_PHQ_by_Tx, fig.cap = "Figure 9. PHQ-9 time trajectory stratified by Tx levels.", echo = FALSE, message=FALSE, warning=FALSE}
+# Ensure Tx is factor
+data_long$Tx <- as.factor(data_long$Tx)
+
+# Simple interaction plot
+ggplot(data_long, aes(x = as.numeric(time), y = PHQ9, color = Tx, group = Tx)) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "Figure 9. PHQ-9 time trajectory stratified by Tx levels.",
+       x = "Time (days)",
+       y = "PHQ-9 scores",
+       color = "Analgesic Tx") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 10* displays PHQ-9 score trajectories stratified by age groups (younger, middle, older). The visualization reveals whether depressive symptoms exhibited differential patterns across age categories during the study period.
+
+```{r fig10_PHQ_by_age, fig.cap = "Figure 10. PHQ-9 time trajectory stratified by age groups.", echo = FALSE, message=FALSE, warning=FALSE}
+# Interaction plot: PHQ-9 over time by age group
+ggplot(data_long, aes(x = as.numeric(time), y = PHQ9, color = age_group, group = age_group)) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_manual(values = c("blue", "green", "orange")) +
+  labs(title = "Figure 10. PHQ-9 time trajectory stratified by age groups.",
+       x = "Time (days)",
+       y = "PHQ-9 scores",
+       color = "Age group") +
+  theme_minimal(base_size = 12)
+```
+
+---
+
+## V. MODERATION EFFECTS OF WAR STATUS AND DIAGNOSIS ON THE TIME TRAJECTORY OF PAIN AND DEPRESSION
+
+This chapter addresses whether the time trajectories of pain (VAS scores) and depression (PHQ-9 scores) are moderated by participants' war exposure status (`war_status`) and diagnosis type (`Dx`). Specifically, we test whether the interaction between time and these variables significantly influences the slope of change in pain and depression over time. Separate LMMs are fitted for both VAS and PHQ-9 outcomes, with interaction terms for (time × `war_status`) and (time × `Dx`).
+
+```{r}
+# Ensure war_status and Dx are factors
+data_long$war_status <- as.factor(data_long$war_status)
+data_long$Dx <- as.factor(data_long$Dx)
+
+# Convert time to numeric (ensure proper ordering)
+data_long=$time_num <- as.numeric(as.character(data_long$time))
+data_long$time_num[is.na(data_long$time_num)] <- 0  # Replace 'before' with 0
+
+# Fit LMM for VAS (pain scores)
+lmm_vas_war_dx <- lmer(VAS ~ time_num * war_status + time_num * Dx + (1 | ID), data = data_long)
+
+# Summary output
+summary(lmm_vas_war_dx)
+```
+
+```{r table7_vas_war_dx, echo = FALSE, message = FALSE, warning = FALSE}
+# APA-style table for VAS moderation (war status and Dx)
+table7_vas <- broom.mixed::tidy(lmm_vas_war_dx, effects = "fixed") %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3))) %>%
+  kable(caption = "Table 7. Moderation effects of war status and diagnosis on VAS time trajectory",
+        col.names = c("Effect", "Term", "Estimate", "Std. Error", "t value", "df", "p-value")) %>%
+  kable_styling(full_width = FALSE)
+
+table7_vas
+```
+
+### Interpretation of moderation effects on VAS time trajectory
+
+The results of the LMM assessing the moderation effects of `war_status` and `Dx` on VAS scores are presented in *Table 7*. Significant main effects of time and both `war_status` categories were observed. Specifically, patients in `war_status`2 ("green zone") and `war_status`3 ("black zone") showed significantly lower pain scores compared to the reference category (`war_status`1, "red zone"), with estimates of -3.655 and -9.414 respectively (both p < 0.01). `Dx` showed a significant positive effect (estimate = 1.016, p < 0.001), suggesting higher VAS scores among cancer-related diagnoses.
+
+Interaction terms between time and `war_status` were not statistically significant, indicating that the differences in pain trajectories across war zones remained relatively stable over time. Similarly, the interaction term between time and `Dx` was non-significant, implying no substantial moderation effect of diagnosis on the slope of pain trajectory over time.
+
+These findings suggest that baseline differences in pain levels are associated with `war_status` and `Dx` type, but these effects do not significantly influence the pattern of change in pain over the follow-up period.
+
+```{r}
+# Linear Mixed-Effects Model for PHQ-9 with war_status and Dx as moderators
+lmm_phq_war_dx <- lmer(PHQ9 ~ time_num * war_status + time_num * Dx + (1 | ID), data = data_long)
+summary(lmm_phq_war_dx)
+```
+
+```{r table8_phq_war_dx, echo = FALSE, message = FALSE, warning = FALSE} 
+# APA-style table for PHQ-9 moderation
+phq_war_dx_table <- broom.mixed::tidy(lmm_phq_war_dx, effects = "fixed") %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3))) %>%
+  kable(caption = "Table 8. Moderation effects of war status and diagnosis on PHQ-9 time trajectory",
+        col.names = c("Effect", "Term", "Estimate", "Std. Error", "t value", "df", "p-value")) %>%
+  kable_styling(full_width = FALSE)
+
+phq_war_dx_table
+```
+
+### Interpretation of moderation effects on PHQ-9 time trajectory
+
+The results of the LMM examining moderation effects of war status and diagnosis on PHQ-9 trajectories are presented in *Table 8*. Significant main effects were found for both `war_status` categories: individuals residing in "green zones" (`war_status`2, estimate = -1.567, p < 0.001) and "black zones" (`war_status`3, estimate = -3.312, p < 0.001) demonstrated significantly lower PHQ-9 scores compared to those in "red zones". Additionally, diagnosis (`Dx`1) showed a significant positive main effect (estimate = 0.835, p = 0.002), indicating that cancer-related diagnoses were associated with higher depression scores.
+
+Importantly, interaction terms between "time_num" and `war_status` also revealed significance. The interaction term "time_num:`war_status`2" (estimate = 0.003, p = 0.007) and "time_num:`war_status`3" (estimate = 0.005, p < 0.001) suggest that the depression trajectory over time differed depending on the war zone exposure, with individuals in less exposed zones experiencing slightly slower improvement in PHQ-9 scores over time. The interaction between time and `Dx` ("time_num:`Dx`1") was not significant (p = 0.440), indicating no substantial moderation effect of `Dx` on the temporal pattern of depression scores.
+
+Overall, these findings indicate that war exposure status has a significant moderating effect on depression trajectories, whereas diagnosis type shows significant baseline differences but does not alter the time trajectory substantially.
+
+### Visualization of moderation effects
+
+```{r fig11_vas_by_war_Dx,fig.cap = "Figure 11. VAS time trajectory stratified by war status and diagnosis.", echo = FALSE, message=FALSE, warning=FALSE}
+# Combined plot: VAS by war status and Dx
+ggplot(data_long, aes(x = time_num, y = VAS, color = war_status, linetype = as.factor(Dx), group = interaction(war_status, Dx))) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_manual(values = c("red", "green", "black"), labels = c("Red zone", "Green zone", "Black zone")) +
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Cancer-related pain", "Musculoskeletal pain")) +
+  labs(title = "Figure 11. VAS time trajectory stratified by war status and diagnosis.",
+       x = "Time (days)",
+       y = "VAS scores",
+       color = "War status",
+       linetype = "Diagnosis") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 11* illustrates the time trajectory of VAS scores stratified by war status and diagnosis. The plot shows that individuals residing in the "red zone" consistently report higher pain scores across all time points, compared to those in the "green" and "black" zones. Additionally, musculoskeletal pain diagnoses tend to have higher VAS scores than cancer-related pain. However, the trajectories remain relatively parallel over time, indicating minimal interaction effects between war exposure, diagnosis, and time on pain trajectories.
+
+```{r fig12_phq_by_war_Dx,fig.cap = "Figure 12. PHQ-9 time trajectory stratified by war status and diagnosis.", echo = FALSE, message=FALSE, warning=FALSE}
+# Combined plot: PHQ-9 by war status and Dx
+ggplot(data_long, aes(x = time_num, y = PHQ9, color = war_status, linetype = as.factor(Dx), group = interaction(war_status, Dx))) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  scale_color_manual(values = c("red", "green", "black"), labels = c("Red zone", "Green zone", "Black zone")) +
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Cancer-related pain", "Musculoskeletal pain")) +
+  labs(title = "Figure 12. PHQ-9 time trajectory stratified by war status and diagnosis.",
+       x = "Time (days)",
+       y = "PHQ-9 scores",
+       color = "War status",
+       linetype = "Diagnosis") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 12* presents the PHQ-9 score trajectories stratified by war status and diagnosis. The visualization reveals that individuals in the "red zone" exhibit higher depression scores compared to those in less exposed zones. A noticeable difference is also observed between musculoskeletal and cancer-related diagnoses, with musculoskeletal pain associated with higher PHQ-9 scores across most time points. These visual trends align with the significant main effects detected in the LMM results, while the interaction effects remain modest.
+
+### Summary
+
+War exposure status demonstrates a significant moderating effect on the trajectory of depression scores, particularly reflecting differences between red, green, and black zones. In contrast, diagnosis type primarily influences baseline levels of both pain and depression without substantially altering their time-related patterns.
+
+---
+
+## VI. TIME TRAJECTORY OF ANALGESICS USAGE
+
+This chapter focuses on modeling the trajectory of changes in analgesics usage (`add_Tx_15` to `add_Tx_300`) over time. Specifically, we test whether analgesics usage shows a significant increase across the follow-up period.
+
+```{r}
+# Reshape analgesics data to long format
+analgesics_long <- data %>%
+  select(ID, starts_with("add_Tx_")) %>%
+  pivot_longer(cols = starts_with("add_Tx_"),
+               names_to = "time",
+               values_to = "Analgesics_use") %>%
+  mutate(time = recode(time,
+                       "add_Tx_15" = "15",
+                       "add_Tx_30" = "30",
+                       "add_Tx_60" = "60",
+                       "add_Tx_90" = "90",
+                       "add_Tx_180" = "180",
+                       "add_Tx_300" = "300"),
+         time = as.numeric(time))
+```
+
+```{r fig13_analgesics_long, fig.cap = "Figure 13. Time trajectory of analgesics usage.", echo = FALSE, message = FALSE, warning = FALSE}
+# Plot analgesics usage over time
+ggplot(analgesics_long, aes(x = time, y = as.numeric(as.character(Analgesics_use)), group = 1)) +
+  stat_summary(fun = mean, geom = "line", size = 1, color = "darkblue") +
+  stat_summary(fun = mean, geom = "point", size = 2, color = "darkblue") +
+  scale_x_continuous(breaks = c(15, 30, 60, 90, 180, 300)) +
+  labs(title = "Figure 13. Time trajectory of analgesics usage.",
+       x = "Time (days)",
+       y = "Mean dosage of analgesics used") +
+  theme_minimal(base_size = 12)
+```
+
+*Figure 13* illustrates the mean dosage of analgesics usage over the follow-up period (days 15 to 300). The plot shows an overall increasing trend in analgesics usage over time, with noticeable fluctuations at specific time points. The sharp increase between days 30 and 60, followed by a mild drop and steady rise, indicates variability in pain management practices during the course of follow-up. The LMM analysis further supports this trend.
+
+```{r}
+# Fit LMM for analgesics usage over time
+lmm_analgesics <- lmer(as.numeric(as.character(Analgesics_use)) ~ time + (1 | ID), data = analgesics_long)
+
+# Summary output
+summary(lmm_analgesics)
+```
+
+```{r table9_analgesics_long, echo = FALSE, message = FALSE, warning = FALSE}
+# APA-style table for LMM results (analgesics usage over time)
+table9_analgesics <- broom.mixed::tidy(lmm_analgesics, effects = "fixed") %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3))) %>%
+  kable(caption = "Table 9. Linear mixed-effects model results for analgesics usage trajectory.",
+        col.names = c("Effect", "Term", "Estimate", "Std. error", "t value", "df", "p-value")) %>%
+  kable_styling(full_width = FALSE)
+
+table9_analgesics
+```
+
+### Interpretation of analgesics usage trajectory
+
+The results of the LMM analyzing analgesics usage over time are presented in *Table 9*. A significant positive effect of time on analgesics usage was observed (estimate = 0.00014, p = 0.003), indicating that the mean dosage of analgesics significantly increased over the 300-day follow-up period. This suggests that, on average, participants progressively increased their use of analgesics over time, possibly reflecting escalating pain management needs during the ongoing war conditions.
+
+### Effect size calculation for analgesics usage trajectory
+
+```{r}
+# Prepare a dataframe to store results
+effect_sizes_analgesics <- data.frame(
+  Time_comparison = character(),
+  Cohens_d = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Unique time points
+time_points <- unique(analgesics_long$time)
+time_points <- time_points[order(time_points)]
+
+# Calculate Cohen's d between consecutive time points
+for (i in 1:(length(time_points) - 1)) {
+  t1 <- time_points[i]
+  t2 <- time_points[i + 1]
+  
+  group1 <- as.numeric(as.character(analgesics_long$Analgesics_use[analgesics_long$time == t1]))
+  group2 <- as.numeric(as.character(analgesics_long$Analgesics_use[analgesics_long$time == t2]))
+  
+  d_result <- cohen.d(group1, group2, paired = TRUE, na.rm = TRUE)
+  
+  effect_sizes_analgesics[i, ] <- c(paste0(t1, " vs ", t2), round(d_result$estimate, 3))
+}
+
+effect_sizes_analgesics
+```
+
+```{r table10_effect_sizes_analgesics, echo = FALSE, message = FALSE, warning = FALSE}
+# APA-styled table for effect sizes (Cohen's d) of analgesics usage
+effect_sizes_analgesics %>%
+  kable(caption = "Table 10. Effect sizes (Cohen's d) between consecutive time points for analgesics usage trajectory.",
+        col.names = c("Time comparison", "Cohen's d"),
+        digits = 3) %>%
+  kable_styling(full_width = FALSE)
+```
+
+*Table 10* presents the calculated effect sizes (***Cohen's d***) for changes in analgesics usage between consecutive time points. Cohen’s d was calculated using paired comparisons, as the same participants were followed across consecutive time points, ensuring within-subject consistency. The results show small to moderate effect sizes at earlier time points, with the largest observed between days 15 and 30 (d = -0.400) and between days 30 and 60 (d = -0.352). These negative effect sizes indicate a moderate decrease in analgesics usage during the early phase of observation. A small positive effect (d = 0.331) is observed between days 60 and 90, suggesting a slight increase. Subsequent time points (90 vs 180 days and 180 vs 300 days) exhibit minimal effect sizes (both below |0.1|), reflecting relative stability in analgesic consumption in the later stages of the follow-up.
+
+---
+
+## VII. MODERATION EFFECTS OF AGE, INITIAL PAIN REDUCTION, AND PAIN DYNAMICS ON THE TIME TRAJECTORY OF ANALGESICS USAGE
+
+This chapter investigates whether specific baseline characteristics moderate the trajectory of analgesics usage over the follow-up period. In particular, we assess the moderating effects of participants' age, initial pain reduction (`ini_pain_red`), and baseline VAS scores (`VAS_before`) on changes in analgesics usage (add_Tx_15 to add_Tx_300). To examine these potential moderating effects, separate Linear Mixed-Effects Models (LMMs) are fitted for each variable, including interaction terms between time and the moderator. Visualization plots and interpretation of the results accompany each model. 
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    Plan for Chapter VII:
+Step	Description
+1	One model for each moderator variable (3 models total).
+2	APA-style output tables, persistent after knitting.
+3	Interpretation paragraph after each table.
+4	Visualization: interaction plots for clearer client presentation.
+5	Final summary.
 
 
 
